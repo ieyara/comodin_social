@@ -1,0 +1,100 @@
+<?php
+/**
+ * @file
+ * Utilizar comodines para resolver quiz
+ */
+function comodin_social_menu() {
+	$items['comodin-social/request'] = array(
+		'page callback' => 'comodin_social_request',
+		'access callback' => TRUE,
+		'type' => MENU_CALLBACK
+	);
+	return $items;
+}
+
+
+/**
+ * comodin_social_request
+ * El usuario soclicita un comodin para resolver una pregunta de un quiz
+ * Recibimos el NID del quiz, el id del take y el tipo de comodin solicitado (like|share|invite)
+ */
+function comodin_social_request($quiz_nid = 0, $take = 0, $type = '') {
+	// Valos de retorno (status, msg y data)
+	$return = array('status' => '', 'msg' => '', 'data' => array('question' => '', 'answer' => ''));
+	
+	// Verifico parametros
+	if($quiz_nid > 0 && $take > 0 && ($type == 'like' || $type == 'share' || $type == 'invite')){
+		// Cargo los datos del quiz/take
+		
+		$quiz_result = quiz_result_load($_SESSION['quiz'][$quiz_nid]['result_id']);
+		$question = $quiz_result->layout[$take];
+		$question = $quiz_result->layout[$take];
+		$question_node = node_load($question['nid'], $question['vid']);
+		// Almaceno los datos de la respuesta correcta
+		$result_question = $question_node->nid;
+		$result_answer = '0';
+		$max_score_if_chosen = 0;
+		foreach($question_node->alternatives as $alternative){
+			if(intval($alternative['score_if_chosen']) >= $max_score_if_chosen){
+				$max_score_if_chosen = intval($alternative['score_if_chosen']);
+				$result_answer = $alternative['id'];
+			}
+		}
+		if($question_node){
+	
+			// Chequeo que el usuario tiene disponible el comodin que quiere utilizar
+			global $user;
+			$user_fields = user_load($user->uid);
+			$field_name = 'field_comodin_'.$type;
+			if(isset($user_fields->{$field_name})){
+				$comodin_value = $user_fields->{$field_name}['und']['0']['value'];
+				
+				if($comodin_value != 1){
+					// Devuelvo ok y datos de respuesta correcta
+					$return['status'] = 'ok';
+					$return['msg'] = 'Comodín disponible. Solicitud aceptada';
+					$return['data']['question'] = $result_question;
+					$return['data']['answer'] = $result_answer;
+					
+					// Modifico el usuario
+					$edit = array(
+						$field_name => array(
+							'und' => array(
+								0 => array(
+									'value' => 1,
+								),
+							),
+						),
+					);
+					user_save($user_fields, $edit);				
+
+				}
+				else{
+					// Devuelvo error
+					$return['status'] = 'error';
+					$return['msg'] = 'Comodín utilizado';
+				}
+			}
+			else{
+				// Devolvemos error indicando que no existe el comodin
+				$return['status'] = 'error';
+				$return['msg'] = 'No existe el comodín '.$field_name;		
+			}
+		}
+		else{
+			// Devuelvo error con pregunta desconocida
+				$return['status'] = 'error';
+				$return['msg'] = 'No existe la pregunta '.$quiz_nid.'/'.$take;		
+		}
+		
+
+	}
+	else{
+		// Devolvemos error de parametros
+		$return['status'] = 'error';
+		$return['msg'] = 'Error en los parámetros';
+	}
+	
+	// Devuelvo JSON
+	print json_encode($return);
+}

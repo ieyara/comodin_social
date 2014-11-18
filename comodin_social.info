@@ -1,0 +1,5 @@
+name = Comodin Social
+description = Permite utilizar comodines sociales para resolver un quiz
+core = 7.x
+package = C13
+dependencies[] = quiz
